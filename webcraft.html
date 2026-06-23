@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Web Voxel - PE Alpha Edition</title>
+    <!-- Подключаем пиксельный шрифт для аутентичности -->
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            margin: 0; overflow: hidden; 
+            font-family: 'VT323', monospace; /* Пиксельный шрифт */
+            background: #000; user-select: none; -webkit-user-select: none; color: #fff; 
+            touch-action: none;
+        }
+        #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+        
+        /* Классическое меню на весь экран с фоном из земли */
+        #menu, #pause-menu { 
+            position: absolute; top: 0; left: 0; 
+            width: 100%; height: 100%;
+            background-color: #555; /* Резервный цвет */
+            background-size: 64px 64px;
+            image-rendering: pixelated;
+            display: flex; flex-direction: column; 
+            align-items: center; justify-content: center;
+            pointer-events: auto; z-index: 20; 
+            box-sizing: border-box;
+        }
+        #pause-menu { display: none; background-color: rgba(0,0,0,0.7); background-image: none !important; }
+        
+        /* Логотип PE Alpha */
+        #menu h2 { 
+            margin-top: 0; font-size: 60px; font-weight: normal; 
+            color: #E0E0E0; text-shadow: 4px 4px #333;
+            margin-bottom: 50px; text-align: center;
+        }
+        #pause-menu h2 { font-size: 50px; text-shadow: 4px 4px #000; }
+        
+        #crosshair { 
+            position: absolute; top: 50%; left: 50%; width: 16px; height: 16px; 
+            background: transparent; transform: translate(-50%, -50%); 
+            /* Классический крестик */
+            border-top: 2px solid rgba(255,255,255,0.8);
+            border-bottom: 2px solid rgba(255,255,255,0.8);
+            border-left: 2px solid rgba(255,255,255,0.8);
+            border-right: 2px solid rgba(255,255,255,0.8);
+            mix-blend-mode: difference;
+        }
+        #crosshair::after {
+            content: ''; position: absolute; top: 7px; left: -2px; width: 16px; height: 2px; background: rgba(255,255,255,0.8);
+        }
+        #crosshair::before {
+            content: ''; position: absolute; top: -2px; left: 7px; width: 2px; height: 16px; background: rgba(255,255,255,0.8);
+        }
+        
+        #chat { position: absolute; top: 60px; left: 10px; width: 350px; pointer-events: auto; }
+        #chat-log { 
+            height: 120px; overflow-y: auto; margin-bottom: 5px; font-size: 18px; 
+            color: #fff; text-shadow: 2px 2px #000; padding: 5px; 
+            display: flex; flex-direction: column; justify-content: flex-start; 
+        }
+        #chat-input { 
+            width: 100%; padding: 10px; background: rgba(0,0,0,0.6); color: #fff; 
+            border: 2px solid #555; display: none; box-sizing: border-box; 
+            outline: none; font-family: inherit; font-size: 18px;
+        }
+        
+        /* Классические квадратные кнопки */
+        .btn { 
+            width: 400px; padding: 10px; margin: 10px 0; cursor: pointer; 
+            background: #8B8B8B; color: #fff; 
+            border: 4px solid #000; 
+            border-color: #D3D3D3 #4A4A4A #4A4A4A #D3D3D3; /* 3D эффект рамки */
+            font-size: 26px; font-family: 'VT323', monospace; text-shadow: 2px 2px #3F3F3F;
+            transition: background 0.1s; 
+        }
+        .btn:hover { background: #9E9E9E; }
+        .btn:active { border-color: #4A4A4A #D3D3D3 #D3D3D3 #4A4A4A; } /* Вдавленная кнопка */
+
+        input[type="text"].server-input { 
+            padding: 15px; width: 400px; margin-bottom: 10px; 
+            border: 4px solid #000; border-color: #4A4A4A #D3D3D3 #D3D3D3 #4A4A4A;
+            background: #000; color: #fff; text-align: center; box-sizing: border-box; 
+            font-size: 24px; font-family: 'VT323', monospace; text-shadow: 2px 2px #3F3F3F;
+        }
+        input[type="text"].server-input:focus { outline: none; background: #222; }
+        
+        /* Хотбар в стиле Alpha */
+        #hotbar { 
+            position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); 
+            display: flex; pointer-events: auto; background: rgba(139,139,139,0.8); 
+            padding: 4px; border: 4px solid #4A4A4A; z-index: 14;
+        }
+        .slot { 
+            width: 48px; height: 48px; border: 4px solid #000; border-color: #D3D3D3 #4A4A4A #4A4A4A #D3D3D3;
+            cursor: pointer; image-rendering: pixelated; box-sizing: border-box; margin: 0 2px;
+        }
+        .active { border-color: #FFF; border-width: 4px; box-shadow: none; transform: none; }
+        
+        #spawnmenu { 
+            position: absolute; top: 10%; left: 10%; width: 80%; height: 80%; 
+            background: rgba(198, 198, 198, 0.95); border: 4px solid #000; border-color: #FFF #555 #555 #FFF;
+            padding: 25px; display: none; pointer-events: auto; z-index: 30; 
+            overflow-y: auto; box-shadow: 0 10px 40px #000; color: #000;
+        }
+        #spawnmenu h2 { margin-top: 0; font-size: 32px; border-bottom: 4px solid #555; padding-bottom: 10px; text-shadow: none; color: #333; }
+        .spawn-item { 
+            width: 64px; height: 64px; border: 4px solid #000; border-color: #D3D3D3 #4A4A4A #4A4A4A #D3D3D3; margin: 8px; 
+            cursor: pointer; display: inline-block; image-rendering: pixelated; 
+        }
+        .spawn-item:hover { border-color: #FFF; }
+
+        /* --- МОБИЛЬНОЕ УПРАВЛЕНИЕ --- */
+        #mobile-ui { display: none; }
+        .mobile-btn {
+            background: rgba(139, 139, 139, 0.6); color: #fff;
+            border: 3px solid #000; border-color: #D3D3D3 #4A4A4A #4A4A4A #D3D3D3;
+            font-family: 'VT323', monospace; font-size: 22px; text-align: center;
+            display: flex; align-items: center; justify-content: center;
+            user-select: none; -webkit-user-select: none; pointer-events: auto;
+        }
+        .mobile-btn:active {
+            border-color: #4A4A4A #D3D3D3 #D3D3D3 #4A4A4A;
+            background: rgba(80, 80, 80, 0.8);
+        }
+        /* Крестовина (D-pad) слева */
+        #dpad {
+            position: absolute; bottom: 20px; left: 20px;
+            display: grid; grid-template-columns: repeat(3, 45px); grid-template-rows: repeat(3, 45px);
+            gap: 3px; z-index: 15;
+        }
+        /* Кнопки действий справа */
+        #mobile-actions {
+            position: absolute; bottom: 20px; right: 20px;
+            display: flex; flex-direction: column; gap: 8px; z-index: 15;
+        }
+        .action-btn { width: 75px; height: 45px; font-size: 18px; }
+        .jump-btn { height: 55px; font-size: 22px; background: rgba(100, 150, 255, 0.6); }
+        /* Верхняя панель переключателей */
+        #mobile-top {
+            position: absolute; top: 10px; right: 10px;
+            display: flex; gap: 8px; z-index: 15;
+        }
+        .top-btn { width: 50px; height: 40px; font-size: 16px; }
+    </style>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="ui">
+        <div id="crosshair"></div>
+        
+        <div id="menu">
+            <h2>Minecraft<br><span style="font-size: 30px; color: #FFFF55;">Pocket Edition Alpha</span></h2>
+            <button class="btn" id="btn-host">Start Game / Host</button>
+            <div style="margin: 15px 0;"></div>
+            <input type="text" class="server-input" id="join-id" placeholder="Server ID">
+            <button class="btn" id="btn-join">Join Game</button>
+            <p id="status-text" style="font-size: 20px; color: #DDD; margin: 10px 0 0 0; text-shadow: 2px 2px #000;">Waiting...</p>
+        </div>
+
+        <div id="pause-menu">
+            <h2>Game menu</h2>
+            <button class="btn" id="btn-resume">Back to game</button>
+            <button class="btn" id="btn-exit">Quit to title</button>
+        </div>
+        
+        <div id="spawnmenu">
+            <h2>Inventory (Press Q)</h2>
+            <div id="spawnmenu-grid"></div>
+        </div>
+
+        <div id="chat">
+            <div id="chat-log"></div>
+            <input type="text" id="chat-input" placeholder="Type message... (Enter)">
+        </div>
+        <div id="hotbar"></div>
+
+        <!-- HTML Мобильного управления -->
+        <div id="mobile-ui">
+            <div id="dpad">
+                <div></div><div class="mobile-btn" id="md-up">▲</div><div></div>
+                <div class="mobile-btn" id="md-left">◀</div><div></div><div class="mobile-btn" id="md-right">▶</div>
+                <div></div><div class="mobile-btn" id="md-down">▼</div><div></div>
+            </div>
+            <div id="mobile-actions">
+                <div class="mobile-btn action-btn" id="m-break">BREAK</div>
+                <div class="mobile-btn action-btn" id="m-place">PLACE</div>
+                <div class="mobile-btn action-btn jump-btn" id="m-jump">JUMP</div>
+            </div>
+            <div id="mobile-top">
+                <div class="mobile-btn top-btn" id="m-btn-chat">CHAT</div>
+                <div class="mobile-btn top-btn" id="m-btn-inv">INV</div>
+                <div class="mobile-btn top-btn" id="m-btn-pause">MENU</div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+
+        // Проверка мобильного устройства
+        const isMobile = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+        if (isMobile) {
+            document.getElementById('mobile-ui').style.display = 'block';
+        }
+
+        // Генерируем классический фон земли для меню прямо в коде
+        function getDirtBg() {
+            const size = 16;
+            const canvas = document.createElement('canvas'); canvas.width = size; canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            for (let x = 0; x < size; x++) {
+                for (let y = 0; y < size; y++) {
+                    const noise = Math.random();
+                    let r = 110 + (noise - 0.5) * 30;
+                    let g = 80 + (noise - 0.5) * 30;
+                    let b = 60 + (noise - 0.5) * 20;
+                    if(Math.random() < 0.1) { r -= 20; g -= 20; b -= 20; } // Камушки
+                    ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+                    ctx.fillRect(x, y, 1, 1);
+                }
+            }
+            return canvas.toDataURL();
+        }
+        document.getElementById('menu').style.backgroundImage = `url(${getDirtBg()})`;
+
+        const audioUrls = {
+            place: 'https://cdn.freesound.org/previews/411/411178_5121236-lq.mp3', 
+            break: 'https://cdn.freesound.org/previews/420/420232_5121236-lq.mp3', 
+            water: 'https://cdn.freesound.org/previews/174/174762_2437358-lq.mp3'  
+        };
+
+        const audioCache = {};
+        for (let key in audioUrls) {
+            audioCache[key] = new Audio(audioUrls[key]);
+            audioCache[key].preload = 'auto';
+        }
+
+        function playSound(type) {
+            if (audioCache[type]) {
+                const sound = audioCache[type].cloneNode();
+                sound.volume = 0.5; 
+                sound.play().catch(e => console.warn("Audio blocked:", e));
+            }
+        }
+
+        // БЛОКИ: Без PBR, только классические цвета и плоский свет
+        const BLOCKS = {
+            GRASS: {},
+            DIRT: {},
+            COBBLESTONE: {},
+            PLANKS: {},
+            LOG: {},
+            LEAVES: { transparent: false, opacity: 1.0 }, 
+            TNT: {},
+            TORCH: { emissive: 0xffddaa, emissiveIntensity: 0.8 },
+            WATER: { transparent: true, opacity: 0.8, color: 0x3355FF }, 
+            LAVA: { emissive: 0xff5500, emissiveIntensity: 1.0 },
+            WOOL: {}
+        };
+
+        const blockKeys = Object.keys(BLOCKS);
+        let selectedBlockIndex = 0;
+        let waterQueue = []; let waterLevels = new Map();
+
+        function getNoise(x, y) { return (Math.sin(x * 0.4) + Math.cos(y * 0.4) + Math.sin((x+y) * 0.2)) / 3; }
+
+        function createVoxelTexture(type) {
+            const size = 16; 
+            const canvas = document.createElement('canvas'); canvas.width = size; canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            let base, noiseIntensity = 15, drawPattern = (x, y, rand, n) => {};
+
+            switch(type) {
+                case 'GRASS_TOP': base = {r: 100, g: 190, b: 70}; noiseIntensity = 10; drawPattern = (x,y,r,n) => { if(n > 0.4) return {r: 90, g: 180, b: 60}; return null; }; break;
+                case 'GRASS_SIDE': base = {r: 110, g: 80, b: 60}; drawPattern = (x,y,r,n) => { if (y < 4) return {r: 100, g: 190, b: 70}; return null; }; break;
+                case 'DIRT': base = {r: 110, g: 80, b: 60}; noiseIntensity = 15; break;
+                case 'COBBLESTONE': base = {r: 120, g: 120, b: 120}; drawPattern = (x,y,r,n) => { if(x===0 || y===0 || x===8 || y===8) return {r:70, g:70, b:70}; let s = 100 + n*40; return {r:s, g:s, b:s}; }; break;
+                case 'PLANKS': base = {r: 170, g: 120, b: 60}; drawPattern = (x,y) => { if (y%4===0 || x===0) return {r: 120, g: 80, b: 40}; return null; }; break;
+                case 'LOG': base = {r: 80, g: 60, b: 40}; drawPattern = (x,y,r,n) => { if (x%4===0 || n>0.5) return {r: 50, g: 40, b: 25}; return null; }; break;
+                case 'LEAVES': base = {r: 50, g: 130, b: 40}; noiseIntensity = 20; drawPattern = (x,y,r,n) => { if (r > 0.7) return {r:30,g:90,b:20}; return null; }; break;
+                case 'TNT': base = {r: 180, g: 30, b: 30}; drawPattern = (x,y) => { if (y>4 && y<12) return {r: 220, g: 220, b: 220}; if (x%4===0) return {r: 100, g: 20, b: 20}; return null; }; break;
+                case 'TORCH': base = {r: 120, g: 80, b: 40}; drawPattern = (x,y) => { if(y<6 && x>6 && x<10) return {r:255, g:220, b:100}; if(x<7 || x>9 || y>13) return {r:0,g:0,b:0,a:0}; return null; }; break;
+                case 'WATER': base = {r: 50, g: 80, b: 220}; noiseIntensity = 0; break; 
+                case 'LAVA': base = {r: 255, g: 80, b: 0}; noiseIntensity = 20; drawPattern = (x,y,r,n) => { if(n > 0.4) return {r: 255, g: 180, b: 0}; return null; }; break;
+                case 'WOOL': base = {r: 240, g: 240, b: 240}; noiseIntensity = 10; break;
+            }
+
+            for (let x = 0; x < size; x++) {
+                for (let y = 0; y < size; y++) {
+                    const rand = Math.random(); const n = getNoise(x, y);
+                    let r = base.r + (rand - 0.5) * noiseIntensity + n * 10;
+                    let g = base.g + (rand - 0.5) * noiseIntensity + n * 10;
+                    let b = base.b + (rand - 0.5) * noiseIntensity + n * 10;
+                    const cColor = drawPattern(x, y, rand, n);
+                    if (cColor) { if (cColor.a === 0) continue; r = cColor.r; g = cColor.g; b = cColor.b; }
+                    ctx.fillStyle = `rgba(${Math.min(255,r)}, ${Math.min(255,g)}, ${Math.min(255,b)}, 1)`;
+                    ctx.fillRect(x, y, 1, 1);
+                }
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.magFilter = THREE.NearestFilter; texture.minFilter = THREE.NearestFilter;
+            return { texture, canvasUrl: canvas.toDataURL() };
+        }
+
+        // ИНИЦИАЛИЗАЦИЯ ДВИЖКА
+        const scene = new THREE.Scene();
+        const skyColor = new THREE.Color(0x6eb1ff);
+        scene.background = skyColor;
+        scene.fog = new THREE.Fog(0x6eb1ff, 15, 60); 
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" }); 
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.0)); 
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.toneMapping = THREE.LinearToneMapping; 
+        renderer.shadowMap.enabled = false; 
+
+        document.body.appendChild(renderer.domElement);
+        const controls = new PointerLockControls(camera, document.body);
+
+        const ambLight = new THREE.AmbientLight(0x999999); 
+        scene.add(ambLight);
+        
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(10, 50, 20);
+        scene.add(dirLight);
+
+        // МАТЕРИАЛЫ И UI
+        const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
+        const materials = {};
+        const hotbar = document.getElementById('hotbar');
+        const spawnmenuGrid = document.getElementById('spawnmenu-grid');
+
+        function createUiSlot(key, index, imgUrl) {
+            let slot = document.createElement('div'); slot.className = 'slot' + (index === 0 ? ' active' : '');
+            slot.style.backgroundImage = `url(${imgUrl})`; slot.style.backgroundSize = 'cover';
+            // Обработка тача для хотбара на телефонах
+            const selectSlot = () => { selectedBlockIndex = index; updateHotbarSelection(); };
+            slot.addEventListener('click', selectSlot);
+            slot.addEventListener('touchstart', selectSlot);
+            hotbar.appendChild(slot);
+            
+            let smItem = document.createElement('div'); smItem.className = 'spawn-item';
+            smItem.style.backgroundImage = `url(${imgUrl})`; smItem.style.backgroundSize = 'cover';
+            const selectFromInv = () => { 
+                selectedBlockIndex = index; 
+                updateHotbarSelection(); 
+                spawnMenuOpen = false; 
+                document.getElementById('spawnmenu').style.display='none'; 
+                if(!isMobile) controls.lock(); 
+            };
+            smItem.addEventListener('click', selectFromInv);
+            smItem.addEventListener('touchstart', selectFromInv);
+            spawnmenuGrid.appendChild(smItem);
+        }
+
+        blockKeys.forEach((key, index) => {
+            const conf = BLOCKS[key];
+            const matConf = { 
+                transparent: conf.transparent || false, opacity: conf.opacity || 1,
+                side: conf.side || THREE.FrontSide,
+                emissive: new THREE.Color(conf.emissive || 0x000000), emissiveIntensity: conf.emissiveIntensity || 1
+            };
+
+            if (key === 'GRASS') {
+                const top = createVoxelTexture('GRASS_TOP'); const side = createVoxelTexture('GRASS_SIDE'); const bot = createVoxelTexture('DIRT');
+                materials['GRASS'] = [
+                    new THREE.MeshLambertMaterial({ ...matConf, map: side.texture }), new THREE.MeshLambertMaterial({ ...matConf, map: side.texture }),
+                    new THREE.MeshLambertMaterial({ ...matConf, map: top.texture }), new THREE.MeshLambertMaterial({ ...matConf, map: bot.texture }),
+                    new THREE.MeshLambertMaterial({ ...matConf, map: side.texture }), new THREE.MeshLambertMaterial({ ...matConf, map: side.texture })
+                ];
+                createUiSlot(key, index, side.canvasUrl);
+            } else if (key === 'WATER') {
+                const tex = createVoxelTexture(key);
+                materials[key] = new THREE.MeshLambertMaterial({ ...matConf, map: tex.texture, color: conf.color });
+                createUiSlot(key, index, tex.canvasUrl);
+            } else {
+                const tex = createVoxelTexture(key);
+                materials[key] = new THREE.MeshLambertMaterial({ ...matConf, map: tex.texture });
+                createUiSlot(key, index, tex.canvasUrl);
+            }
+        });
+
+        function updateHotbarSelection() { Array.from(hotbar.children).forEach((s, i) => s.className = i === selectedBlockIndex ? 'slot active' : 'slot'); }
+
+        // ЧАНКИ
+        const WORLD_SIZE = 128; const CHUNK_SIZE = 16;
+        let worldBlocks = new Map(); let chunks = new Map();       
+
+        function updateChunkGraphics(cx, cz) {
+            const chunkKey = `${cx},${cz}`;
+            if (chunks.has(chunkKey)) { Object.values(chunks.get(chunkKey)).forEach(m => scene.remove(m)); chunks.delete(chunkKey); }
+            const blocksInChunk = {}; blockKeys.forEach(k => blocksInChunk[k] = []);
+            const startX = cx * CHUNK_SIZE, startZ = cz * CHUNK_SIZE;
+
+            for(let x = startX; x < startX + CHUNK_SIZE; x++) {
+                for(let z = startZ; z < startZ + CHUNK_SIZE; z++) {
+                    for(let y = -15; y < 25; y++) {
+                        const bKey = `${x},${y},${z}`;
+                        if (worldBlocks.has(bKey)) blocksInChunk[worldBlocks.get(bKey)].push({x, y, z});
+                    }
+                }
+            }
+
+            const dummy = new THREE.Object3D(); const chunkMeshes = {};
+            Object.keys(blocksInChunk).forEach(type => {
+                const list = blocksInChunk[type]; if (list.length === 0) return;
+                const instMesh = new THREE.InstancedMesh(boxGeometry, materials[type], list.length);
+                
+                list.forEach((pos, idx) => { dummy.position.set(pos.x, pos.y, pos.z); dummy.updateMatrix(); instMesh.setMatrixAt(idx, dummy.matrix); });
+                scene.add(instMesh); chunkMeshes[type] = instMesh;
+            });
+            chunks.set(chunkKey, chunkMeshes);
+        }
+
+        function addBlock(x, y, z, type, isSetup = false) {
+            const key = `${x},${y},${z}`; if (worldBlocks.has(key)) return;
+            worldBlocks.set(key, type);
+            if (type === 'WATER') { waterLevels.set(key, 3); waterQueue.push({ x, y, z }); } 
+            if (!isSetup) {
+                updateChunkGraphics(Math.floor(x / CHUNK_SIZE), Math.floor(z / CHUNK_SIZE));
+                playSound(type === 'WATER' ? 'water' : 'place'); 
+                if (peerConnection) broadcast({ type: 'place', x, y, z, blockType: type });
+            }
+        }
+
+        function removeBlock(x, y, z) {
+            const key = `${x},${y},${z}`;
+            if (worldBlocks.has(key)) {
+                const type = worldBlocks.get(key);
+                worldBlocks.delete(key); waterLevels.delete(key);
+                updateChunkGraphics(Math.floor(x / CHUNK_SIZE), Math.floor(z / CHUNK_SIZE));
+                playSound(type === 'WATER' ? 'water' : 'break'); 
+                if (peerConnection) broadcast({ type: 'remove', x, y, z });
+            }
+        }
+
+        // ВОДА
+        function tickWater() {
+            if (waterQueue.length === 0) return; 
+            let nextQueue = [];
+            let chunksToUpdate = new Set(); 
+            
+            for (let cell of waterQueue) {
+                let key = `${cell.x},${cell.y},${cell.z}`;
+                if (worldBlocks.get(key) !== 'WATER') continue;
+                
+                let cLvl = waterLevels.get(key) || 3; 
+                let bKey = `${cell.x},${cell.y-1},${cell.z}`;
+                
+                if (!worldBlocks.has(bKey) && cell.y > -20) { 
+                    worldBlocks.set(bKey, 'WATER');
+                    waterLevels.set(bKey, 3); 
+                    nextQueue.push({ x: cell.x, y: cell.y-1, z: cell.z }); 
+                    chunksToUpdate.add(`${Math.floor(cell.x/CHUNK_SIZE)},${Math.floor(cell.z/CHUNK_SIZE)}`);
+                    continue; 
+                }
+                
+                if (cLvl > 1 && (worldBlocks.get(bKey) !== 'WATER' && worldBlocks.has(bKey))) {
+                    [{x:1,z:0}, {x:-1,z:0}, {x:0,z:1}, {x:0,z:-1}].forEach(o => {
+                        let nx = cell.x+o.x, ny = cell.y, nz = cell.z+o.z;
+                        let nKey = `${nx},${ny},${nz}`;
+                        
+                        if (!worldBlocks.has(nKey)) { 
+                            worldBlocks.set(nKey, 'WATER');
+                            waterLevels.set(nKey, cLvl - 1); 
+                            nextQueue.push({ x: nx, y: ny, z: nz }); 
+                            chunksToUpdate.add(`${Math.floor(nx/CHUNK_SIZE)},${Math.floor(nz/CHUNK_SIZE)}`);
+                        }
+                    });
+                }
+            }
+            waterQueue = nextQueue;
+            
+            chunksToUpdate.forEach(chunkStr => {
+                let [cx, cz] = chunkStr.split(',');
+                updateChunkGraphics(parseInt(cx), parseInt(cz));
+            });
+        }
+        setInterval(tickWater, 200); 
+
+        // ГЕНЕРАЦИЯ МИРА
+        function generateWorld() {
+            const half = WORLD_SIZE / 2;
+            for (let x = -half; x < half; x++) {
+                for (let z = -half; z < half; z++) {
+                    let y = Math.floor(Math.sin(x*0.04)*Math.cos(z*0.04)*8 + Math.cos(x*0.1)*3);
+                    
+                    if (y < -2) {
+                        worldBlocks.set(`${x},${y},${z}`, 'DIRT');
+                        for (let wy = y + 1; wy <= -2; wy++) { worldBlocks.set(`${x},${wy},${z}`, 'WATER'); }
+                    } else {
+                        worldBlocks.set(`${x},${y},${z}`, 'GRASS');
+                        if (Math.random() < 0.015 && x > -half+5 && x < half-5 && z > -half+5 && z < half-5) {
+                            let th = 4 + Math.floor(Math.random()*2);
+                            for (let i = 0; i < th; i++) worldBlocks.set(`${x},${y+1+i},${z}`, 'LOG');
+                            let ly = y+th;
+                            for (let lx = x-1; lx <= x+1; lx++) for (let lz = z-1; lz <= z+1; lz++) worldBlocks.set(`${lx},${ly},${lz}`, 'LEAVES');
+                            worldBlocks.set(`${x},${ly+1},${z}`, 'LEAVES');
+                        }
+                    }
+                    worldBlocks.set(`${x},${y-1},${z}`, 'DIRT'); 
+                    for(let d = 2; d <= 5; d++) worldBlocks.set(`${x},${y-d},${z}`, 'COBBLESTONE');
+                }
+            }
+            for (let cx = -half/CHUNK_SIZE; cx < half/CHUNK_SIZE; cx++) for (let cz = -half/CHUNK_SIZE; cz < half/CHUNK_SIZE; cz++) updateChunkGraphics(cx, cz);
+        }
+
+        // СЕТЬ И УПРАВЛЕНИЕ
+        let isPlaying = false;
+        const peer = new Peer(); let peerConnection = null, isHost = false, players = {};
+
+        function startGame() { 
+            isPlaying = true; 
+            document.getElementById('menu').style.display = 'none'; 
+            if (!isMobile) controls.lock(); 
+            camera.position.set(0, 15, 0); 
+        }
+        
+        document.getElementById('btn-host').addEventListener('click', () => {
+            isHost = true; document.getElementById('status-text').innerText = `Your ID: ${peer.id}`;
+            generateWorld(); startGame();
+            peer.on('connection', (conn) => {
+                let wData = []; worldBlocks.forEach((t, k) => { let [x,y,z]=k.split(','); wData.push({x:+x,y:+y,z:+z,t}); });
+                conn.on('open', () => conn.send({ type: 'world_data', data: wData }));
+                setupConnection(conn);
+            });
+        });
+
+        document.getElementById('btn-join').addEventListener('click', () => {
+            peerConnection = peer.connect(document.getElementById('join-id').value);
+            setupConnection(peerConnection);
+            peerConnection.on('open', () => { startGame(); });
+        });
+
+        const chatInput = document.getElementById('chat-input'); const chatLog = document.getElementById('chat-log');
+        function printChat(msg) { const div = document.createElement('div'); div.textContent = msg; chatLog.appendChild(div); chatLog.scrollTop = chatLog.scrollHeight; }
+
+        controls.addEventListener('unlock', () => { if (isPlaying && !spawnMenuOpen && document.activeElement !== chatInput && !isMobile) document.getElementById('pause-menu').style.display = 'flex'; });
+        document.getElementById('btn-resume').addEventListener('click', () => { document.getElementById('pause-menu').style.display = 'none'; if(!isMobile) controls.lock(); });
+        document.getElementById('btn-exit').addEventListener('click', () => { location.reload(); });
+
+        let spawnMenuOpen = false;
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && isPlaying) {
+                if (document.activeElement === chatInput) {
+                    if (chatInput.value.trim() !== "") { printChat("Steve: " + chatInput.value); if(peerConnection) broadcast({type: 'chat', msg: chatInput.value}); }
+                    chatInput.value = ''; chatInput.style.display = 'none'; if(!isMobile) controls.lock();
+                } else { if(!isMobile) controls.unlock(); chatInput.style.display = 'block'; chatInput.focus(); }
+            }
+            if(document.activeElement === chatInput) return;
+            if (e.key.toLowerCase() === 'q') { toggleInventory(); e.preventDefault(); }
+            if (e.key >= '1' && e.key <= '9') { selectedBlockIndex = parseInt(e.key) - 1; updateHotbarSelection(); }
+            if (e.code === 'KeyW') keys.w = true; if (e.code === 'KeyS') keys.s = true;
+            if (e.code === 'KeyA') keys.a = true; if (e.code === 'KeyD') keys.d = true; if (e.code === 'Space') keys.space = true;
+        });
+        document.addEventListener('keyup', (e) => {
+            if (e.code === 'KeyW') keys.w = false; if (e.code === 'KeyS') keys.s = false;
+            if (e.code === 'KeyA') keys.a = false; if (e.code === 'KeyD') keys.d = false; if (e.code === 'Space') keys.space = false;
+        });
+        document.addEventListener('wheel', (e) => { if(!controls.isLocked && !isMobile) return; selectedBlockIndex = (selectedBlockIndex + (e.deltaY>0?1:-1) + blockKeys.length) % blockKeys.length; updateHotbarSelection(); });
+
+        const keys = { w: false, a: false, s: false, d: false, space: false };
+
+        // Функция обработки установки/удаления блоков (Единая для ПК и Смартфонов)
+        function performRaycast(isDestroyAction) {
+            const start = camera.position.clone(); const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+            let hit = null, norm = null, curr = start.clone();
+            for (let i = 0; i < 50; i++) {
+                curr.addScaledVector(dir, 0.1);
+                let rx = Math.round(curr.x), ry = Math.round(curr.y), rz = Math.round(curr.z);
+                const b = worldBlocks.get(`${rx},${ry},${rz}`);
+                if (b && b !== 'WATER') {
+                    hit = new THREE.Vector3(rx, ry, rz); let d = curr.clone().sub(hit);
+                    norm = new THREE.Vector3(Math.abs(d.x)>Math.abs(d.y)&&Math.abs(d.x)>Math.abs(d.z)?Math.sign(d.x):0, Math.abs(d.y)>Math.abs(d.x)&&Math.abs(d.y)>Math.abs(d.z)?Math.sign(d.y):0, Math.abs(d.z)>Math.abs(d.x)&&Math.abs(d.z)>Math.abs(d.y)?Math.sign(d.z):0);
+                    break;
+                }
+            }
+            if (hit) {
+                if (isDestroyAction) removeBlock(hit.x, hit.y, hit.z);
+                else if (norm) addBlock(hit.x+norm.x, hit.y+norm.y, hit.z+norm.z, blockKeys[selectedBlockIndex]);
+            }
+        }
+
+        document.addEventListener('mousedown', (e) => {
+            if (!controls.isLocked || isMobile) return;
+            performRaycast(e.button === 0);
+        });
+
+        // --- ЛОГИКА ТАЧ-СКРИНА ДЛЯ МОБИЛЬНЫХ ---
+        let isMovingCamera = false;
+        let previousTouch = { x: 0, y: 0 };
+
+        window.addEventListener('touchstart', (e) => {
+            if (!isPlaying || spawnMenuOpen || document.getElementById('pause-menu').style.display === 'flex') return;
+            // Если тач произошел на интерактивном элементе UI, игнорируем его для вращения камеры
+            if (e.target.tagName === 'BUTTON' || e.target.classList.contains('mobile-btn') || e.target.classList.contains('slot') || e.target.id === 'chat-input') return;
+            
+            const touch = e.touches[0];
+            previousTouch.x = touch.clientX;
+            previousTouch.y = touch.clientY;
+            isMovingCamera = true;
+        });
+
+        window.addEventListener('touchmove', (e) => {
+            if (!isMovingCamera) return;
+            const touch = e.touches[0];
+            const deltaX = touch.clientX - previousTouch.x;
+            const deltaY = touch.clientY - previousTouch.y;
+
+            // Классический поворот FPS камеры через углы Эйлера
+            camera.rotation.order = 'YXZ';
+            camera.rotation.y -= deltaX * 0.005;
+            camera.rotation.x -= deltaY * 0.005;
+            camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+
+            previousTouch.x = touch.clientX;
+            previousTouch.y = touch.clientY;
+        });
+
+        window.addEventListener('touchend', () => { isMovingCamera = false; });
+
+        // Связываем виртуальный D-pad с логикой перемещения
+        const bindDpad = (id, keyStr) => {
+            const el = document.getElementById(id);
+            el.addEventListener('touchstart', (e) => { e.preventDefault(); keys[keyStr] = true; });
+            el.addEventListener('touchend', (e) => { e.preventDefault(); keys[keyStr] = false; });
+        };
+        bindDpad('md-up', 'w');
+        bindDpad('md-down', 's');
+        bindDpad('md-left', 'a');
+        bindDpad('md-right', 'd');
+
+        // Кнопка прыжка
+        const mJump = document.getElementById('m-jump');
+        mJump.addEventListener('touchstart', (e) => { e.preventDefault(); keys.space = true; });
+        mJump.addEventListener('touchend', (e) => { e.preventDefault(); keys.space = false; });
+
+        // Кнопки разрушения и установки блоков
+        document.getElementById('m-break').addEventListener('touchstart', (e) => { e.preventDefault(); performRaycast(true); });
+        document.getElementById('m-place').addEventListener('touchstart', (e) => { e.preventDefault(); performRaycast(false); });
+
+        // Функции верхних утилит
+        function toggleInventory() {
+            spawnMenuOpen = !spawnMenuOpen; 
+            document.getElementById('spawnmenu').style.display = spawnMenuOpen ? 'block' : 'none'; 
+            if (!isMobile) { spawnMenuOpen ? controls.unlock() : controls.lock(); }
+        }
+
+        document.getElementById('m-btn-inv').addEventListener('touchstart', (e) => { e.preventDefault(); toggleInventory(); });
+        
+        document.getElementById('m-btn-chat').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (chatInput.style.display === 'block') {
+                if (chatInput.value.trim() !== "") { printChat("Steve: " + chatInput.value); if(peerConnection) broadcast({type: 'chat', msg: chatInput.value}); }
+                chatInput.value = ''; chatInput.style.display = 'none';
+            } else {
+                chatInput.style.display = 'block'; chatInput.focus();
+            }
+        });
+
+        document.getElementById('m-btn-pause').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            document.getElementById('pause-menu').style.display = 'flex';
+        });
+
+
+        function setupConnection(conn) {
+            conn.on('data', (d) => {
+                if (d.type === 'world_data') { d.data.forEach(b => worldBlocks.set(`${b.x},${b.y},${b.z}`, b.t)); for (let cx = -WORLD_SIZE/2/CHUNK_SIZE; cx < WORLD_SIZE/2/CHUNK_SIZE; cx++) for (let cz = -WORLD_SIZE/2/CHUNK_SIZE; cz < WORLD_SIZE/2/CHUNK_SIZE; cz++) updateChunkGraphics(cx, cz); } 
+                else if (d.type === 'place') { addBlock(d.x, d.y, d.z, d.blockType, true); updateChunkGraphics(Math.floor(d.x/CHUNK_SIZE), Math.floor(d.z/CHUNK_SIZE)); playSound('place'); }
+                else if (d.type === 'remove') { worldBlocks.delete(`${d.x},${d.y},${d.z}`); updateChunkGraphics(Math.floor(d.x/CHUNK_SIZE), Math.floor(d.z/CHUNK_SIZE)); playSound('break'); }
+                else if (d.type === 'chat') { printChat("Friend: " + d.msg); }
+                else if (d.type === 'move') { if (!players[conn.peer]) { players[conn.peer] = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.7, 0.7), new THREE.MeshLambertMaterial({color:0x3366ff})); scene.add(players[conn.peer]); } players[conn.peer].position.set(d.pos.x, d.pos.y, d.pos.z); }
+            });
+        }
+        function broadcast(data) { if(peerConnection) peerConnection.send(data); }
+
+        const velocity = new THREE.Vector3(), direction = new THREE.Vector3(); let canJump = false, prevTime = performance.now();
+        
+        function checkColl(pos) {
+            for (let x=Math.floor(pos.x-0.3); x<=Math.floor(pos.x+0.3); x++) 
+                for (let y=Math.floor(pos.y-1.5); y<=Math.floor(pos.y+0.1); y++) 
+                    for (let z=Math.floor(pos.z-0.3); z<=Math.floor(pos.z+0.3); z++) {
+                        const b = worldBlocks.get(`${x},${y},${z}`);
+                        if (b && !['WATER','TORCH'].includes(b)) return true;
+                    }
+            return false;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = performance.now();
+            const delta = Math.min((time - prevTime) / 1000, 0.1);
+
+            // Разрешаем движение без лока указателя, если игра запущена на смартфоне
+            const canMove = (controls.isLocked || isMobile) && isPlaying;
+
+            if (canMove) {
+                velocity.x -= velocity.x * 8.0 * delta; 
+                velocity.z -= velocity.z * 8.0 * delta; 
+                velocity.y -= 45.0 * delta; 
+
+                direction.z = Number(keys.w) - Number(keys.s); direction.x = Number(keys.d) - Number(keys.a); direction.normalize();
+                
+                if (keys.w || keys.s) velocity.z -= direction.z * 35.0 * delta; 
+                if (keys.a || keys.d) velocity.x -= direction.x * 35.0 * delta;
+                
+                if (keys.space && canJump) { velocity.y = 12; canJump = false; }
+
+                controls.moveRight(-velocity.x * delta); if (checkColl(controls.getObject().position)) { controls.moveRight(velocity.x * delta); velocity.x = 0; }
+                controls.moveForward(-velocity.z * delta); if (checkColl(controls.getObject().position)) { controls.moveForward(velocity.z * delta); velocity.z = 0; }
+                
+                controls.getObject().position.y += velocity.y * delta;
+                if (checkColl(controls.getObject().position)) { 
+                    controls.getObject().position.y -= velocity.y * delta; 
+                    if (velocity.y < 0) canJump = true; 
+                    velocity.y = 0; 
+                } else canJump = false;
+                
+                if (controls.getObject().position.y < -30) { controls.getObject().position.set(0, 15, 0); velocity.set(0,0,0); }
+                broadcast({ type: 'move', pos: { x: camera.position.x, y: camera.position.y-0.8, z: camera.position.z } });
+            }
+            renderer.render(scene, camera); prevTime = time;
+        }
+        animate();
+        
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+    </script>
+</body>
+</html>
